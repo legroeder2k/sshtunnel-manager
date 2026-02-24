@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "name": "Local 2222 to Remote localhost:8080",
+  "autostart": false,
+  "destination": {
+    "user": "youruser",
+    "host": "192.168.2.1",
+    "port": 22
+  },
+  "identity_file": "~/.ssh/id_test",
+  "proxy_jump": null,
+  "forwards": [
+    {
+      "kind": "local",
+      "bind_address": "127.0.0.1",
+      "local_port": 2222,
+      "remote_host": "localhost",
+      "remote_port": 8080
+    }
+  ]
+}

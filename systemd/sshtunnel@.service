@@ -1,0 +1,15 @@
+[Unit]
+Description=SSH Tunnel (%i)
+Documentation=man:ssh(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Packaged path; local development can copy/override this unit as needed.
+ExecStart=/usr/bin/sshtunnel-runner %i
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target
