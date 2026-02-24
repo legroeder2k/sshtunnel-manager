@@ -3,4 +3,13 @@ name = "backendd"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "sshtunnel-manager-backendd"
+path = "src/main.rs"
+
 [dependencies]
+anyhow = "1.0"
+profile = { path = "../profile" }
+serde_json = "1.0"
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "signal"] }
+zbus = { version = "4.4", features = ["tokio"] }

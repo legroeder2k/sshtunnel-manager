@@ -1,0 +1,13 @@
+[Unit]
+Description=SSH Tunnel Manager Backend Daemon
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sshtunnel-manager-backendd
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=default.target

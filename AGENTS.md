@@ -93,9 +93,9 @@ Nice-to-have (not required for MVP):
 
 ### Backend D-Bus API (Rust via `zbus`)
 Define a stable API:
-- Bus name: `com.example.SshTunnelManager`
-- Object path: `/com/example/SshTunnelManager`
-- Interface: `com.example.SshTunnelManager1`
+- Bus name: `com.legroeder2k.SshTunnelManager`
+- Object path: `/com/legroeder2k/SshTunnelManager`
+- Interface: `com.legroeder2k.SshTunnelManager1`
 
 Methods:
 - `ListProfiles() -> a(sssb)` (id, name, status, autostart)
@@ -190,7 +190,7 @@ Acceptance:
 Deliverables:
 - `gnome-extension/`:
   - tile + submenu list
-  - connects to `com.example.SshTunnelManager`
+  - connects to `com.legroeder2k.SshTunnelManager`
   - live updates via signals
   - “Open Tunnel Manager” entry
 - Use GNOME Quick Settings extension patterns. :contentReference[oaicite:10]{index=10}

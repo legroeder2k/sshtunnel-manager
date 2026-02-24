@@ -175,10 +175,9 @@ journalctl --user -u sshtunnel@<id>.service
 ## D-BUS Interface
 The backend daemon provides:
 
-* Bus name: com.example.SshTunnelManager
-* Object path: /com/example/SshTunnelManager
-* Interface: com.example.SshTunnelManager1
+* Bus name: com.legroeder2k.SshTunnelManager
+* Object path: /com/legroeder2k/SshTunnelManager
+* Interface: com.legroeder2k.SshTunnelManager1
 
 See AGENTS.md for method and signal definitions.
 The GNOME Shell extension and GUI must use this API.
-
