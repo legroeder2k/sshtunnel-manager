@@ -1,0 +1,27 @@
+# rustfmt.toml
+
+# Use the stable formatting rules
+edition = "2021"
+
+# Keep lines readable in IDEs and side-by-side diffs
+max_width = 100
+
+# Keep function signatures compact unless they get large
+fn_params_layout = "Tall"
+
+# Make match arms easier to scan
+match_block_trailing_comma = true
+
+# Ensure imports are consistently ordered
+reorder_imports = true
+reorder_modules = true
+
+# Group imports in a deterministic way
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+
+# Always use trailing commas in multi-line constructs
+trailing_comma = "Vertical"
+
+# Avoid unnecessary vertical noise
+use_small_heuristics = "Default"

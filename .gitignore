@@ -1,0 +1,115 @@
+# =========================================
+# Rust / Cargo
+# =========================================
+
+# Compiled artifacts
+/target/
+
+# Backup files created by rustfmt or editors
+**/*.rs.bk
+
+# Cargo lock:
+# Keep Cargo.lock for binaries, ignore for libraries.
+# This project contains binaries -> keep Cargo.lock tracked.
+# So we DO NOT ignore it.
+
+
+# =========================================
+# JetBrains / CLion
+# =========================================
+
+# IDE project settings
+.idea/
+
+# CMake artifacts (CLion sometimes creates these)
+cmake-build-*/
+
+# JetBrains Fleet / other IntelliJ-based temp files
+*.iml
+out/
+
+
+# =========================================
+# OS-specific junk
+# =========================================
+
+# Linux
+*~
+
+# macOS (in case someone clones there)
+.DS_Store
+
+# Windows (just in case)
+Thumbs.db
+Desktop.ini
+
+
+# =========================================
+# GNOME / systemd runtime artifacts
+# =========================================
+
+# Local extension build artifacts (if you bundle zip files)
+gnome-extension/*.zip
+
+# If you build extension locally before packaging
+gnome-extension/build/
+
+# systemd transient files (should never be committed)
+*.service.d/
+*.swp
+
+
+# =========================================
+# Profile runtime data
+# =========================================
+
+# User-specific tunnel profiles (never commit real user configs)
+profiles/
+~/.config/sshtunnel-manager/
+
+# If you create local test profiles
+test-profiles/
+
+
+# =========================================
+# Logs / local debug output
+# =========================================
+
+*.log
+logs/
+
+
+# =========================================
+# Environment / secrets
+# =========================================
+
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# SSH known_hosts copies (if ever generated locally)
+known_hosts
+
+
+# =========================================
+# Coverage / tooling
+# =========================================
+
+# Tarpaulin / coverage
+coverage/
+*.profraw
+*.profdata
+
+# Cargo audit advisory DB cache
+.advisory-db/
+
+
+# =========================================
+# Temporary build helpers
+# =========================================
+
+# If you experiment with local build scripts
+build/
+dist/

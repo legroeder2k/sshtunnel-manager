@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/profile",
+  "crates/tunnelctl",
+  "crates/backendd",
+  "crates/runner",
+]
