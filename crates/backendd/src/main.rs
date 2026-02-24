@@ -97,7 +97,10 @@ impl BackendService {
         Ok(())
     }
 
-    async fn connect_all(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) -> fdo::Result<()> {
+    async fn connect_all(
+        &self,
+        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+    ) -> fdo::Result<()> {
         let entries = profile::list_profiles().map_err(to_fdo)?;
         for ProfileEntry { id, .. } in entries {
             let unit = profile::unit_name_for_id(&id).map_err(to_fdo)?;
@@ -257,7 +260,9 @@ fn systemd_show(unit: &str) -> Result<UnitProps> {
         exec_main_status: map
             .remove("ExecMainStatus")
             .and_then(|v| v.parse::<i32>().ok()),
-        exec_main_code: map.remove("ExecMainCode").and_then(|v| v.parse::<i32>().ok()),
+        exec_main_code: map
+            .remove("ExecMainCode")
+            .and_then(|v| v.parse::<i32>().ok()),
     })
 }
 
