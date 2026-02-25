@@ -11,7 +11,21 @@ The project provides:
 
 The goal is to provide a user experience similar to the built-in VPN/Wi-Fi selector in GNOME.
 
+This was my first agentic coding experience where AI did 99% of the work.
+
 ---
+
+# Installation from RPM
+
+Run dnf install on the RPM package and afterwards enable the systemd user unit:
+
+```bash
+dnf install https://github.com/legroeder2k/sshtunnel-manager/releases/download/v0.1.0/sshtunnel-manager-0.1.0-1.fc43.x86_64.rpm
+systemctl --user daemon-reload
+systemctl --user enable --now sshtunnel-backendd.service
+```
+
+For the quick settings extension to appear it might need a gnome restart (logout/login).
 
 ## Architecture Overview
 
@@ -46,6 +60,7 @@ The project is structured as a Cargo workspace.
 ---
 
 ## Repository Layout
+
 ```
 sshtunnel-manager/
 │
@@ -57,15 +72,14 @@ sshtunnel-manager/
 │ ├── profile/ (shared schema + validation)
 │ ├── tunnelctl/ (CLI)
 │ ├── backendd/ (D-Bus daemon)
-│ └── runner/ (sshtunnel-runner helper)
+│ ├── runner/ (sshtunnel-runner helper)
+│ └── gui/ (GTK4 + Libadwaita editor)
 │
 ├── systemd/
 │ └── sshtunnel@.service
 (template unit)
 │
-├── gnome-extension/
-│
-├── gui/
+├── gnome-extensions/
 │
 ├── packaging/
 └── docs/
@@ -76,11 +90,13 @@ sshtunnel-manager/
 ## Requirements
 
 ### Runtime
+
 - Fedora Workstation 43 (GNOME 49) or later
 - OpenSSH (`ssh`)
 - systemd (user session)
 
 ### Development
+
 - Rust (via rustup recommended)
 - cargo
 - rustfmt
@@ -89,6 +105,7 @@ sshtunnel-manager/
 - gcc / clang toolchain
 
 For GUI development:
+
 - gtk4-devel
 - libadwaita-devel
 - glib2-devel
@@ -110,19 +127,31 @@ cargo test --workspace
 ```
 
 Lint (recommended):
+
 ```bash
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 Format:
+
 ```bash
 cargo fmt --all
 ```
+
+## Packaging (Fedora RPM)
+
+Fedora-oriented RPM packaging assets are in `packaging/`:
+
+- `packaging/build-rpm.sh` (build helper around `rpmbuild`)
+- `packaging/sshtunnel-manager.spec` (RPM spec)
+- `packaging/README.md` (dependencies, build steps, and systemd user-unit deployment notes)
+
 ## Development Milestones
 
 See AGENTS.md for the authoritative implementation specification.
 
 Development order:
+
 1. Profile schema + CLI + systemd integration
 2. Backend D-Bus daemon
 3. GNOME Shell Quick Settings extension
@@ -150,6 +179,7 @@ The backend is the source of truth for profile interpretation and validation.
 ## systemd Integration
 
 Each tunnel runs as a user-level systemd service:
+
 ```
 sshtunnel@<profile-id>.service
 ```
@@ -173,6 +203,7 @@ journalctl --user -u sshtunnel@<id>.service
 ```
 
 ## D-BUS Interface
+
 The backend daemon provides:
 
 * Bus name: com.legroeder2k.SshTunnelManager
@@ -184,7 +215,7 @@ The GNOME Shell extension and GUI must use this API.
 
 ## GUI (Milestone 4)
 
-The GUI editor lives in `gui/` and is part of the workspace.
+The GUI editor lives in `crates/gui/` and is part of the workspace.
 
 Run it during development:
 
@@ -193,6 +224,7 @@ cargo run -p sshtunnel-manager-gui
 ```
 
 Current GUI capabilities:
+
 - Profile list + editor form
 - Create/edit/delete profile JSONs using the shared `profile` crate validation
 - Multiple local/remote forwards with bind-address support

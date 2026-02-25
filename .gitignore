@@ -113,3 +113,7 @@ coverage/
 # If you experiment with local build scripts
 build/
 dist/
+
+
+# Packaging
+packaging/rpmbuild

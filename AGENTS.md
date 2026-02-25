@@ -241,7 +241,7 @@ Acceptance:
 
 Deliverables:
 
-- `gui/`:
+- `crates/gui/`:
     - profile list view
     - profile editor form
     - validation feedback
@@ -277,7 +277,7 @@ Optional later:
 - `crates/runner/` (sshtunnel-runner helper)
 - `systemd/`
 - `gnome-extension/`
-- `gui/`
+- `crates/gui/`
 - `packaging/`
 - `docs/`
 
