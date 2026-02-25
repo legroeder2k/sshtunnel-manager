@@ -1,0 +1,6 @@
+{
+  "uuid": "sshtunnel-manager@legroeder2k.com",
+  "name": "SSH Tunnels",
+  "description": "Quick Settings SSH tunnel controls via sshtunnel-manager backend",
+  "shell-version": ["49"]
+}
