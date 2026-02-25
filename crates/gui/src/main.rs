@@ -10,7 +10,9 @@ use std::time::Duration;
 use adw::prelude::*;
 use anyhow::{Context, Result, anyhow};
 use glib::ControlFlow;
-use profile::{Destination, Forward, LocalForward, Profile, RemoteForward, SCHEMA_VERSION};
+use profile::{
+    Destination, Forward, HostKeyChecking, LocalForward, Profile, RemoteForward, SCHEMA_VERSION,
+};
 
 const APP_ID: &str = "com.legroeder2k.SshTunnelManager.Gui";
 const BUS_NAME: &str = "com.legroeder2k.SshTunnelManager";
@@ -69,6 +71,7 @@ struct AppUi {
     ssh_port_spin: gtk::SpinButton,
     identity_entry: gtk::Entry,
     proxy_jump_entry: gtk::Entry,
+    host_key_policy_combo: gtk::ComboBoxText,
     autostart_switch: gtk::Switch,
     forwards_list: gtk::ListBox,
     save_button: gtk::Button,
@@ -218,6 +221,10 @@ impl AppUi {
         identity_entry.set_placeholder_text(Some("/home/user/.ssh/id_ed25519"));
         let proxy_jump_entry = gtk::Entry::new();
         proxy_jump_entry.set_placeholder_text(Some("jump.example.com or user@jump:22"));
+        let host_key_policy_combo = gtk::ComboBoxText::new();
+        host_key_policy_combo.append(Some("ask"), "Ask (default)");
+        host_key_policy_combo.append(Some("accept_new"), "Accept New");
+        host_key_policy_combo.set_active_id(Some("ask"));
         let autostart_switch = gtk::Switch::new();
 
         attach_labeled(&grid, 0, "Profile ID", &id_entry);
@@ -228,6 +235,7 @@ impl AppUi {
         attach_labeled(&grid, 5, "Identity File", &identity_entry);
         attach_labeled(&grid, 6, "ProxyJump", &proxy_jump_entry);
         attach_labeled(&grid, 7, "Autostart", &autostart_switch);
+        attach_labeled(&grid, 8, "Host Key Policy", &host_key_policy_combo);
 
         let forwards_header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         forwards_header.set_margin_top(8);
@@ -269,6 +277,7 @@ impl AppUi {
             ssh_port_spin,
             identity_entry,
             proxy_jump_entry,
+            host_key_policy_combo,
             autostart_switch,
             forwards_list,
             save_button,
@@ -535,7 +544,7 @@ impl AppUi {
             }
             if profile.status == "failed" && !profile.last_error.is_empty() {
                 sub.push_str("\n");
-                sub.push_str(&profile.last_error);
+                sub.push_str(&format_failure_message(&profile.last_error));
             }
             let subtitle = gtk::Label::new(Some(&sub));
             subtitle.set_xalign(0.0);
@@ -583,8 +592,10 @@ impl AppUi {
             self.runtime_status_label
                 .set_text(&format!("Status: {}", profile.status));
             if profile.status == "failed" && !profile.last_error.is_empty() {
-                self.runtime_error_label
-                    .set_text(&format!("Last error: {}", profile.last_error));
+                self.runtime_error_label.set_text(&format!(
+                    "Last error: {}",
+                    format_failure_message(&profile.last_error)
+                ));
             } else {
                 self.runtime_error_label.set_text("");
             }
@@ -605,6 +616,7 @@ impl AppUi {
         self.ssh_port_spin.set_value(22.0);
         self.identity_entry.set_text("");
         self.proxy_jump_entry.set_text("");
+        self.host_key_policy_combo.set_active_id(Some("ask"));
         self.autostart_switch.set_active(false);
         self.runtime_status_label.set_text("Status: disconnected");
         self.runtime_error_label.set_text("");
@@ -650,6 +662,11 @@ impl AppUi {
         );
         self.proxy_jump_entry
             .set_text(profile.proxy_jump.as_deref().unwrap_or(""));
+        self.host_key_policy_combo
+            .set_active_id(Some(match profile.host_key_checking {
+                HostKeyChecking::Ask => "ask",
+                HostKeyChecking::AcceptNew => "accept_new",
+            }));
         self.autostart_switch.set_active(profile.autostart);
 
         self.clear_forward_rows();
@@ -903,6 +920,10 @@ impl AppUi {
 
         let identity_file = trim_optional(&self.identity_entry);
         let proxy_jump = trim_optional(&self.proxy_jump_entry);
+        let host_key_checking = match self.host_key_policy_combo.active_id().as_deref() {
+            Some("accept_new") => HostKeyChecking::AcceptNew,
+            _ => HostKeyChecking::Ask,
+        };
 
         let mut forwards = Vec::new();
         for row in self.forward_rows.borrow().iter() {
@@ -948,6 +969,7 @@ impl AppUi {
             },
             identity_file: identity_file.map(PathBuf::from),
             proxy_jump,
+            host_key_checking,
             forwards,
         };
 
@@ -1023,6 +1045,31 @@ fn slugify_profile_id(name: &str) -> String {
     }
 }
 
+fn format_failure_message(message: &str) -> String {
+    if let Some(mapped) = map_host_key_failure_message(message) {
+        return mapped.to_string();
+    }
+    message.trim().to_string()
+}
+
+fn map_host_key_failure_message(message: &str) -> Option<&'static str> {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("host key verification failed")
+        || lower.contains("authenticity of host")
+        || lower.contains("are you sure you want to continue connecting")
+    {
+        return Some(
+            "Host key not trusted yet. Connect once in a terminal or set Host Key Policy to 'Accept New'.",
+        );
+    }
+    if lower.contains("remote host identification has changed") {
+        return Some(
+            "Host key changed. Verify the server and update/remove the old known_hosts entry.",
+        );
+    }
+    None
+}
+
 fn collect_refresh_snapshot() -> Result<RefreshSnapshot> {
     let mut by_id: HashMap<String, RuntimeProfile> = HashMap::new();
     for entry in profile::list_profiles()? {
@@ -1065,7 +1112,9 @@ fn collect_refresh_snapshot() -> Result<RefreshSnapshot> {
 
     for profile in &mut profiles {
         if profile.status == "failed" {
-            profile.last_error = last_journal_line_for_profile(&profile.id).unwrap_or_default();
+            profile.last_error = format_failure_message(
+                &last_journal_line_for_profile(&profile.id).unwrap_or_default(),
+            );
         }
     }
 

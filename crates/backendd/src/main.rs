@@ -213,8 +213,9 @@ fn status_for_id(id: &str) -> Result<TunnelStatus> {
     let unit = profile::unit_name_for_id(id)?;
     let props = systemd_show(&unit)?;
     let mut status = map_systemd_status(&props);
-    if status.status == "failed" && status.message.is_empty() {
-        status.message = last_journal_line(&unit).unwrap_or_default();
+    if status.status == "failed" {
+        let journal_line = last_journal_line(&unit).unwrap_or_default();
+        status.message = friendly_failure_message(&status.message, &journal_line);
     }
     Ok(status)
 }
@@ -306,6 +307,46 @@ fn blank_as_default<'a>(value: &'a str, default: &'a str) -> &'a str {
     if value.is_empty() { default } else { value }
 }
 
+fn friendly_failure_message(systemd_message: &str, journal_line: &str) -> String {
+    if let Some(msg) = host_key_failure_message(journal_line) {
+        return msg;
+    }
+
+    if !journal_line.trim().is_empty()
+        && (systemd_message.trim().is_empty() || systemd_message.contains("systemd result="))
+    {
+        return journal_line.trim().to_string();
+    }
+
+    if !systemd_message.trim().is_empty() {
+        return systemd_message.trim().to_string();
+    }
+
+    journal_line.trim().to_string()
+}
+
+fn host_key_failure_message(line: &str) -> Option<String> {
+    let lower = line.to_ascii_lowercase();
+    if lower.contains("host key verification failed")
+        || lower.contains("authenticity of host")
+        || lower.contains("are you sure you want to continue connecting")
+    {
+        return Some(
+            "Host key not trusted yet. Connect once in a terminal or set Host Key Policy to 'Accept New'."
+                .to_string(),
+        );
+    }
+
+    if lower.contains("remote host identification has changed") {
+        return Some(
+            "Host key changed. Verify the server and remove/update the old known_hosts entry before reconnecting."
+                .to_string(),
+        );
+    }
+
+    None
+}
+
 fn last_journal_line(unit: &str) -> Result<String> {
     let output = Command::new("journalctl")
         .args(["--user", "-u", unit, "-n", "1", "--no-pager", "-o", "cat"])
@@ -345,5 +386,21 @@ mod tests {
         });
         assert_eq!(status.status, "failed");
         assert!(status.message.contains("exit_status=255"));
+    }
+
+    #[test]
+    fn rewrites_unknown_host_key_failure_to_actionable_message() {
+        let msg = host_key_failure_message("Host key verification failed.").expect("message");
+        assert!(msg.contains("Host key not trusted yet"));
+        assert!(msg.contains("Accept New"));
+    }
+
+    #[test]
+    fn prefers_journal_line_over_generic_systemd_failure() {
+        let msg = friendly_failure_message(
+            "systemd result=exit-code exit_status=255",
+            "Connection refused",
+        );
+        assert_eq!(msg, "Connection refused");
     }
 }
