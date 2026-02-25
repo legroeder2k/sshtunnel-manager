@@ -20,7 +20,7 @@ This was my first agentic coding experience where AI did 99% of the work.
 Run dnf install on the RPM package and afterwards enable the systemd user unit:
 
 ```bash
-dnf install https://github.com/legroeder2k/sshtunnel-manager/releases/download/v0.1.0/sshtunnel-manager-0.1.0-1.fc43.x86_64.rpm
+dnf install https://github.com/legroeder2k/sshtunnel-manager/releases/download/v0.1.0/sshtunnel-manager-0.1.0-4.fc43.x86_64.rpm
 systemctl --user daemon-reload
 systemctl --user enable --now sshtunnel-backendd.service
 ```
