@@ -36,11 +36,18 @@ struct RefreshSnapshot {
 
 #[derive(Debug)]
 enum UiMsg {
-    RefreshFinished(Result<RefreshSnapshot, String>),
+    FullRefreshFinished(Result<RefreshSnapshot, String>),
+    StatusRefreshFinished(Result<StatusRefreshSnapshot, String>),
     ActionFinished {
         label: String,
         result: Result<(), String>,
     },
+}
+
+#[derive(Debug, Clone, Default)]
+struct StatusRefreshSnapshot {
+    backend_available: bool,
+    rows: Vec<(String, String, String, bool)>,
 }
 
 struct ForwardRowWidgets {
@@ -56,12 +63,36 @@ struct ForwardRowWidgets {
     port2_spin: gtk::SpinButton,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ForwardDraft {
+    kind: String,
+    bind_address: String,
+    port1: i32,
+    host: String,
+    port2: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EditorDraft {
+    id: String,
+    name: String,
+    user: String,
+    host: String,
+    ssh_port: i32,
+    identity_file: String,
+    proxy_jump: String,
+    host_key_policy: String,
+    autostart: bool,
+    forwards: Vec<ForwardDraft>,
+}
+
 struct AppUi {
     window: adw::ApplicationWindow,
     profile_list: gtk::ListBox,
     backend_status_label: gtk::Label,
     form_title_label: gtk::Label,
     validation_label: gtk::Label,
+    dirty_label: gtk::Label,
     runtime_status_label: gtk::Label,
     runtime_error_label: gtk::Label,
     id_entry: gtk::Entry,
@@ -90,6 +121,9 @@ struct AppUi {
     forward_rows: RefCell<Vec<ForwardRowWidgets>>,
     next_forward_row_id: Cell<u64>,
     refresh_in_flight: Cell<bool>,
+    status_refresh_in_flight: Cell<bool>,
+    suppress_selection_load: Cell<bool>,
+    editor_baseline: RefCell<Option<EditorDraft>>,
 }
 
 fn main() {
@@ -181,6 +215,11 @@ impl AppUi {
         validation_label.add_css_class("error");
         form_outer.append(&validation_label);
 
+        let dirty_label = gtk::Label::new(None);
+        dirty_label.set_xalign(0.0);
+        dirty_label.add_css_class("warning");
+        form_outer.append(&dirty_label);
+
         let runtime_status_label = gtk::Label::new(Some("Status: disconnected"));
         runtime_status_label.set_xalign(0.0);
         form_outer.append(&runtime_status_label);
@@ -268,6 +307,7 @@ impl AppUi {
             backend_status_label,
             form_title_label,
             validation_label,
+            dirty_label,
             runtime_status_label,
             runtime_error_label,
             id_entry,
@@ -296,6 +336,9 @@ impl AppUi {
             forward_rows: RefCell::new(Vec::new()),
             next_forward_row_id: Cell::new(1),
             refresh_in_flight: Cell::new(false),
+            status_refresh_in_flight: Cell::new(false),
+            suppress_selection_load: Cell::new(false),
+            editor_baseline: RefCell::new(None),
         });
 
         ui.install_handlers();
@@ -314,7 +357,8 @@ impl AppUi {
         self.window.present();
         self.schedule_message_pump();
         self.schedule_refresh_loop();
-        self.request_refresh();
+        self.schedule_dirty_indicator_loop();
+        self.request_full_refresh();
     }
 
     fn install_handlers(self: &Rc<Self>) {
@@ -323,6 +367,9 @@ impl AppUi {
             let Some(ui) = weak.upgrade() else {
                 return;
             };
+            if ui.suppress_selection_load.get() {
+                return;
+            }
             let Some(row) = row else {
                 return;
             };
@@ -345,7 +392,7 @@ impl AppUi {
         let weak = Rc::downgrade(self);
         self.reload_button.connect_clicked(move |_| {
             if let Some(ui) = weak.upgrade() {
-                ui.request_refresh();
+                ui.request_full_refresh();
             }
         });
 
@@ -441,17 +488,38 @@ impl AppUi {
             let Some(ui) = weak.upgrade() else {
                 return ControlFlow::Break;
             };
-            ui.request_refresh();
+            ui.request_status_refresh();
+            ControlFlow::Continue
+        });
+    }
+
+    fn schedule_dirty_indicator_loop(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        glib::timeout_add_local(Duration::from_millis(200), move || {
+            let Some(ui) = weak.upgrade() else {
+                return ControlFlow::Break;
+            };
+            ui.refresh_dirty_indicator();
             ControlFlow::Continue
         });
     }
 
     fn handle_msg(self: &Rc<Self>, msg: UiMsg) {
         match msg {
-            UiMsg::RefreshFinished(result) => {
+            UiMsg::FullRefreshFinished(result) => {
                 self.refresh_in_flight.set(false);
                 match result {
                     Ok(snapshot) => self.apply_refresh(snapshot),
+                    Err(err) => {
+                        self.backend_status_label
+                            .set_text(&format!("Backend refresh failed: {err}"));
+                    },
+                }
+            },
+            UiMsg::StatusRefreshFinished(result) => {
+                self.status_refresh_in_flight.set(false);
+                match result {
+                    Ok(snapshot) => self.apply_status_refresh(snapshot),
                     Err(err) => {
                         self.backend_status_label
                             .set_text(&format!("Backend refresh failed: {err}"));
@@ -469,19 +537,30 @@ impl AppUi {
                         self.set_validation_message(&format!("{label} failed: {err}"), true);
                     },
                 }
-                self.request_refresh();
+                self.request_status_refresh();
             },
         }
     }
 
-    fn request_refresh(self: &Rc<Self>) {
+    fn request_full_refresh(self: &Rc<Self>) {
         if self.refresh_in_flight.replace(true) {
             return;
         }
         let tx = self.sender.clone();
         thread::spawn(move || {
             let result = collect_refresh_snapshot().map_err(|e| e.to_string());
-            let _ = tx.send(UiMsg::RefreshFinished(result));
+            let _ = tx.send(UiMsg::FullRefreshFinished(result));
+        });
+    }
+
+    fn request_status_refresh(self: &Rc<Self>) {
+        if self.status_refresh_in_flight.replace(true) {
+            return;
+        }
+        let tx = self.sender.clone();
+        thread::spawn(move || {
+            let result = collect_status_refresh_snapshot().map_err(|e| e.to_string());
+            let _ = tx.send(UiMsg::StatusRefreshFinished(result));
         });
     }
 
@@ -499,7 +578,53 @@ impl AppUi {
         self.update_action_sensitivity(snapshot.backend_available);
     }
 
+    fn apply_status_refresh(self: &Rc<Self>, snapshot: StatusRefreshSnapshot) {
+        let mut profiles = self.runtime_profiles.borrow().clone();
+        let mut changed = false;
+
+        for (id, name, status, autostart) in snapshot.rows {
+            if let Some(existing) = profiles.iter_mut().find(|p| p.id == id) {
+                if existing.name != name
+                    || existing.status != status
+                    || existing.autostart != autostart
+                {
+                    existing.name = name;
+                    existing.status = status.clone();
+                    existing.autostart = autostart;
+                    if status != "failed" {
+                        existing.last_error.clear();
+                    }
+                    changed = true;
+                }
+                if status == "failed" {
+                    let new_msg = format_failure_message(
+                        &last_journal_line_for_profile(&id).unwrap_or_default(),
+                    );
+                    if existing.last_error != new_msg {
+                        existing.last_error = new_msg;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if changed {
+            self.runtime_profiles.replace(profiles);
+            self.render_profile_list();
+        }
+
+        self.backend_status_label
+            .set_text(if snapshot.backend_available {
+                "Backend: available"
+            } else {
+                "Backend: unavailable (editing still works)"
+            });
+        self.refresh_runtime_section();
+        self.update_action_sensitivity(snapshot.backend_available);
+    }
+
     fn render_profile_list(self: &Rc<Self>) {
+        self.suppress_selection_load.set(true);
         while let Some(row) = self.profile_list.row_at_index(0) {
             self.profile_list.remove(&row);
         }
@@ -519,6 +644,7 @@ impl AppUi {
             label.set_xalign(0.0);
             row.set_child(Some(&label));
             self.profile_list.append(&row);
+            self.suppress_selection_load.set(false);
             return;
         }
 
@@ -563,6 +689,7 @@ impl AppUi {
         if let Some(row) = row_to_select {
             self.profile_list.select_row(Some(&row));
         }
+        self.suppress_selection_load.set(false);
     }
 
     fn update_action_sensitivity(&self, backend_available: bool) {
@@ -628,6 +755,7 @@ impl AppUi {
             remote_host: "localhost".into(),
             remote_port: 8080,
         })));
+        self.mark_editor_baseline();
         self.update_action_sensitivity(false);
     }
 
@@ -680,6 +808,7 @@ impl AppUi {
         self.delete_button.set_sensitive(true);
         self.refresh_runtime_section();
         let backend_available = self.backend_status_label.text().contains("available");
+        self.mark_editor_baseline();
         self.update_action_sensitivity(backend_available);
     }
 
@@ -843,18 +972,29 @@ impl AppUi {
 
                 let save_result = (|| -> Result<()> {
                     profile::save_profile_by_id(&id, &profile)?;
-                    sync_autostart(&id, profile.autostart)?;
                     Ok(())
                 })();
 
                 match save_result {
                     Ok(()) => {
+                        let autostart_sync_error = sync_autostart(&id, profile.autostart).err();
                         self.selected_id.replace(Some(id.clone()));
                         self.form_title_label
                             .set_text(&format!("Edit Profile: {}", profile.name));
                         self.delete_button.set_sensitive(true);
-                        self.backend_status_label.set_text("Profile saved");
-                        self.request_refresh();
+                        self.mark_editor_baseline();
+                        if let Some(err) = autostart_sync_error {
+                            self.backend_status_label.set_text("Profile saved (autostart sync warning)");
+                            self.set_validation_message(
+                                &format!(
+                                    "Profile saved, but autostart state was not fully applied: {err}"
+                                ),
+                                true,
+                            );
+                        } else {
+                            self.backend_status_label.set_text("Profile saved");
+                        }
+                        self.request_full_refresh();
                     },
                     Err(err) => {
                         self.set_validation_message(&format!("Save failed: {err}"), true);
@@ -900,7 +1040,7 @@ impl AppUi {
                 self.backend_status_label
                     .set_text(&format!("Deleted profile '{id}'"));
                 self.reset_editor_for_new_profile();
-                self.request_refresh();
+                self.request_full_refresh();
             },
             Err(err) => self.set_validation_message(&format!("Delete failed: {err}"), true),
         }
@@ -1009,6 +1149,60 @@ impl AppUi {
 
     fn clear_validation(&self) {
         self.set_validation_message("", false);
+    }
+
+    fn capture_editor_draft(&self) -> EditorDraft {
+        let forwards = self
+            .forward_rows
+            .borrow()
+            .iter()
+            .map(|row| ForwardDraft {
+                kind: row
+                    .kind
+                    .active_id()
+                    .map(|s| s.to_string())
+                    .unwrap_or_default(),
+                bind_address: row.bind_entry.text().trim().to_string(),
+                port1: row.port1_spin.value_as_int(),
+                host: row.host_entry.text().trim().to_string(),
+                port2: row.port2_spin.value_as_int(),
+            })
+            .collect();
+
+        EditorDraft {
+            id: self.id_entry.text().trim().to_string(),
+            name: self.name_entry.text().trim().to_string(),
+            user: self.user_entry.text().trim().to_string(),
+            host: self.host_entry.text().trim().to_string(),
+            ssh_port: self.ssh_port_spin.value_as_int(),
+            identity_file: self.identity_entry.text().trim().to_string(),
+            proxy_jump: self.proxy_jump_entry.text().trim().to_string(),
+            host_key_policy: self
+                .host_key_policy_combo
+                .active_id()
+                .map(|s| s.to_string())
+                .unwrap_or_default(),
+            autostart: self.autostart_switch.is_active(),
+            forwards,
+        }
+    }
+
+    fn mark_editor_baseline(&self) {
+        self.editor_baseline
+            .replace(Some(self.capture_editor_draft()));
+        self.refresh_dirty_indicator();
+    }
+
+    fn refresh_dirty_indicator(&self) {
+        let baseline = self.editor_baseline.borrow();
+        let current = self.capture_editor_draft();
+        let is_dirty = baseline.as_ref().map(|b| b != &current).unwrap_or(false);
+
+        if is_dirty {
+            self.dirty_label.set_text("Unsaved changes");
+        } else {
+            self.dirty_label.set_text("");
+        }
     }
 }
 
@@ -1124,6 +1318,19 @@ fn collect_refresh_snapshot() -> Result<RefreshSnapshot> {
     })
 }
 
+fn collect_status_refresh_snapshot() -> Result<StatusRefreshSnapshot> {
+    match list_profiles_via_backend() {
+        Ok(rows) => Ok(StatusRefreshSnapshot {
+            backend_available: true,
+            rows,
+        }),
+        Err(_) => Ok(StatusRefreshSnapshot {
+            backend_available: false,
+            rows: Vec::new(),
+        }),
+    }
+}
+
 fn list_profiles_via_backend() -> Result<Vec<(String, String, String, bool)>> {
     let conn = zbus::blocking::Connection::session().context("connecting to session bus")?;
     let proxy = zbus::blocking::Proxy::new(&conn, BUS_NAME, OBJECT_PATH, IFACE_NAME)
@@ -1150,10 +1357,22 @@ fn sync_autostart(id: &str, autostart: bool) -> Result<()> {
         run_command("systemctl", &["--user", "enable", "--now", &unit])
             .with_context(|| format!("enabling autostart for {id}"))?;
     } else {
-        run_command("systemctl", &["--user", "disable", "--now", &unit])
-            .with_context(|| format!("disabling autostart for {id}"))?;
+        if let Err(err) = run_command("systemctl", &["--user", "disable", "--now", &unit]) {
+            if is_benign_disable_autostart_error(&err.to_string()) {
+                return Ok(());
+            }
+            return Err(err).with_context(|| format!("disabling autostart for {id}"));
+        }
     }
     Ok(())
+}
+
+fn is_benign_disable_autostart_error(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    lower.contains("unit file") && lower.contains("does not exist")
+        || lower.contains("not loaded")
+        || lower.contains("no such file or directory")
+        || lower.contains("not found")
 }
 
 fn last_journal_line_for_profile(id: &str) -> Result<String> {
