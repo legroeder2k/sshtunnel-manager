@@ -421,6 +421,7 @@ export default class SshTunnelManagerExtension extends Extension {
     openManager() {
         const appSystem = Shell.AppSystem.get_default();
         const appIds = [
+            'com.legroeder2k.SshTunnelManager.Gui.desktop',
             'com.legroeder2k.SshTunnelManager.desktop',
             'sshtunnel-manager-gui.desktop',
             'sshtunnel-manager.desktop',

@@ -181,3 +181,21 @@ The backend daemon provides:
 
 See AGENTS.md for method and signal definitions.
 The GNOME Shell extension and GUI must use this API.
+
+## GUI (Milestone 4)
+
+The GUI editor lives in `gui/` and is part of the workspace.
+
+Run it during development:
+
+```bash
+cargo run -p sshtunnel-manager-gui
+```
+
+Current GUI capabilities:
+- Profile list + editor form
+- Create/edit/delete profile JSONs using the shared `profile` crate validation
+- Multiple local/remote forwards with bind-address support
+- Autostart toggle (syncs systemd user unit enable/disable)
+- Connect/disconnect controls via backend D-Bus
+- Runtime status + last error line (for failed tunnels)

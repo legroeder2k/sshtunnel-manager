@@ -5,4 +5,5 @@ members = [
   "crates/tunnelctl",
   "crates/backendd",
   "crates/runner",
+  "gui",
 ]

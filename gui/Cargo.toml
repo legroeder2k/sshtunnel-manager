@@ -1,0 +1,16 @@
+[package]
+name = "sshtunnel-manager-gui"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "sshtunnel-manager-gui"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+glib = "0.21"
+gtk = { package = "gtk4", version = "0.10" }
+adw = { package = "libadwaita", version = "0.8" }
+profile = { path = "../crates/profile" }
+zbus = "4.4"

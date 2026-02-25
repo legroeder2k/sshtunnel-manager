@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=SSH Tunnel Manager
+Comment=Manage SSH tunnel profiles and connections
+Exec=sshtunnel-manager-gui
+Icon=network-vpn
+Terminal=false
+Categories=Network;GTK;
+Keywords=SSH;Tunnel;Tunnels;Forward;Port Forwarding;
+StartupNotify=true
